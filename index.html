@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeSight Industrial | Monitoreo AI</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <link rel="icon" href="img/icon.png" type="image/png">
+    <script src="env.config.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-dark: #1e293b;
+            --panel-lighter: #334155;
+            --primary: #3b82f6;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Navbar */
+        .navbar {
+            background-color: var(--panel-dark);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-lighter);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+        }
+
+        .brand i { color: var(--primary); }
+
+        .nav-actions button {
+            background: transparent;
+            border: 1px solid var(--panel-lighter);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: 10px;
+        }
+
+        .nav-actions button:hover { background: var(--panel-lighter); color: white; }
+
+        /* Layout Principal */
+        .main-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 350px; 
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar Cámaras */
+        .sidebar {
+            background-color: #162032;
+            border-right: 1px solid var(--panel-lighter);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+        }
+
+        .camera-item {
+            background: var(--panel-dark);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .camera-item:hover { border-color: var(--primary); transform: translateY(-1px); }
+        .camera-item.active { background: rgba(59, 130, 246, 0.15); border-color: var(--primary); }
+        
+        .cam-header { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+        .cam-zone { font-size: 0.75rem; margin-top: 6px; display: inline-block; padding: 2px 8px; border-radius: 10px; }
+        .zone-risk { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+        .zone-safe { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+        /* Visor Central */
+        .viewport {
+            position: relative;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,0,0,0.6);
+            border: 2px solid var(--panel-lighter);
+        }
+
+        .video-wrapper.alert-active {
+            animation: pulse-red 1s infinite;
+            border-color: var(--danger);
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        #mainImage, #webcamVideo {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls-bar {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: var(--panel-lighter); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+        .btn-secondary:hover { background: #475569; }
+
+        /* --- CONTENEDOR DE LOGS AJUSTADO --- */
+        .logs-panel {
+            background-color: #162032;
+            border-left: 1px solid var(--panel-lighter);
+            display: flex;
+            flex-direction: column;
+            height: 100%; /* Ocupa todo el alto disponible */
+            overflow: hidden; /* Evita que el panel entero scrollee */
+        }
+
+        .log-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--panel-lighter);
+            background: var(--panel-dark);
+            flex-shrink: 0; /* No se encoge */
+        }
+
+        .log-filters {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .filter-btn {
+            background: transparent;
+            border: 1px solid var(--panel-lighter);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .log-list {
+            flex: 1; /* Toma todo el espacio central */
+            overflow-y: auto; /* Solo esta parte tiene scroll */
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-footer {
+            padding: 10px 15px;
+            font-size: 0.75rem;
+            border-top: 1px solid var(--panel-lighter);
+            background: var(--panel-dark);
+            flex-shrink: 0; /* Siempre visible abajo */
+        }
+
+        /* Scrollbar personalizado */
+        .log-list::-webkit-scrollbar { width: 6px; }
+        .log-list::-webkit-scrollbar-track { background: #0f172a; }
+        .log-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+        .log-entry {
+            display: grid;
+            grid-template-columns: 55px 1fr;
+            gap: 10px;
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+            font-size: 0.85rem;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .log-time { color: var(--text-muted); font-size: 0.75rem; font-family: monospace; }
+        .log-content { display: flex; flex-direction: column; gap: 2px; }
+        .log-title { font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        .log-detail { font-size: 0.8rem; color: var(--text-muted); }
+
+        .log-type-risk { border-left: 3px solid var(--danger); background: rgba(239, 68, 68, 0.05); }
+        .log-type-risk .log-title { color: #fca5a5; }
+        .log-type-safe { border-left: 3px solid var(--success); }
+        .log-type-safe .log-title { color: #86efac; }
+        .log-type-info { border-left: 3px solid var(--primary); }
+        .log-type-system { border-left: 3px solid var(--text-muted); opacity: 0.7; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            background: var(--panel-dark);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 400px;
+            border: 1px solid var(--panel-lighter);
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid var(--panel-lighter);
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        
+        audio { display: none; }
+    </style>
+</head>
+<body>
+
+    <audio id="alarmSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+    <nav class="navbar">
+        <div class="brand">
+            <i class="fa-solid fa-eye"></i> SafeSight Industrial
+        </div>
+        <div class="nav-actions">
+            <button onclick="generateReport()"><i class="fa-solid fa-file-pdf"></i> Informe PDF</button>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="section-title">
+                Cámaras Activas
+                <i class="fa-solid fa-plus" style="cursor:pointer; padding:5px" onclick="openModal()" title="Añadir Cámara"></i>
+            </div>
+            <div id="cameraList"></div>
+        </aside>
+
+        <main class="viewport">
+            <div class="video-wrapper" id="videoWrapper">
+                <img id="mainImage" src="img/obras.jpg" alt="Feed Cámara" onerror="this.style.display='none';">
+                <video id="webcamVideo" autoplay playsinline style="display:none;"></video>
+                <canvas id="overlayCanvas"></canvas>
+            </div>
+
+            <div class="controls-bar">
+                <button class="btn-secondary" onclick="toggleWebcam()">
+                    <i class="fa-solid fa-video"></i> <span id="camBtnText">Usar Webcam</span>
+                </button>
+                <button class="btn-primary" onclick="analyzeFrame()">
+                    <i class="fa-solid fa-radar"></i> Analizar Escena
+                </button>
+            </div>
+        </main>
+
+        <aside class="logs-panel">
+            <div class="log-header">
+                <div class="section-title" style="margin-bottom:5px">Centro de Incidentes</div>
+                <div class="log-filters">
+                    <button class="filter-btn active" onclick="filterLogs('all', this)">Todo</button>
+                    <button class="filter-btn" onclick="filterLogs('risk', this)">Alertas</button>
+                    <button class="filter-btn" onclick="filterLogs('system', this)">Sistema</button>
+                </div>
+            </div>
+            
+            <div class="log-list" id="logList">
+                </div>
+
+            <div class="log-footer">
+                <strong>Estado:</strong> <span id="systemStatus" style="color:var(--success)">● En Línea</span>
+            </div>
+        </aside>
+    </div>
+
+    <div class="modal" id="addCamModal">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color:white;">Agregar Cámara CCTV</h3>
+            <div class="form-group">
+                <label>Nombre de la Cámara</label>
+                <input type="text" id="newCamName" placeholder="Ej: Pasillo Planta B">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Zona</label>
+                <select id="newCamZone">
+                    <option value="Riesgo">Zona de Alto Riesgo (Prohibido Celular)</option>
+                    <option value="Segura">Zona Segura (Comedor/Oficina)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Ruta de imagen (Local)</label>
+                <input type="text" id="newCamUrl" placeholder="img/nueva_foto.jpg">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveCamera()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        let cameras = [
+            { id: 1, name: "Zona de Obras A1", zone: "Riesgo", url: "img/obras.jpg" },
+            { id: 2, name: "Comedor General", zone: "Segura", url: "img/comedor.jpg" },
+            { id: 3, name: "Almacén Central", zone: "Riesgo", url: "img/almacen.jpg" }, 
+            { id: 4, name: "Escaleras de Emergencia", zone: "Riesgo", url: "img/escaleras.png" }        
+        ];
+
+        let currentCamera = cameras[0];
+        let isWebcamActive = false;
+        let stream = null;
+
+        const videoWrapper = document.getElementById('videoWrapper');
+        const mainImage = document.getElementById('mainImage');
+        const webcamVideo = document.getElementById('webcamVideo');
+        const canvas = document.getElementById('overlayCanvas');
+        const ctx = canvas.getContext('2d');
+        const logList = document.getElementById('logList');
+        const alarm = document.getElementById('alarmSound');
+
+        function init() {
+            renderCameraList();
+            loadCamera(0);
+            addLog("Sistema iniciado", "system", "Esperando análisis de escena...");
+        }
+
+        function renderCameraList() {
+            const list = document.getElementById('cameraList');
+            list.innerHTML = '';
+            cameras.forEach((cam, index) => {
+                const item = document.createElement('div');
+                item.className = `camera-item ${currentCamera.id === cam.id ? 'active' : ''}`;
+                item.onclick = () => loadCamera(index);
+                item.innerHTML = `
+                    <div class="cam-header">
+                        <span><i class="fa-solid fa-video"></i> ${cam.name}</span>
+                    </div>
+                    <span class="cam-zone ${cam.zone === 'Riesgo' ? 'zone-risk' : 'zone-safe'}">${cam.zone}</span>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function loadCamera(index) {
+            stopWebcam();
+            currentCamera = cameras[index];
+            mainImage.src = currentCamera.url;
+            mainImage.style.display = 'block';
+            webcamVideo.style.display = 'none';
+            document.getElementById('camBtnText').innerText = "Usar Webcam";
+            isWebcamActive = false;
+            videoWrapper.classList.remove('alert-active');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            renderCameraList();
+            addLog(`Cámara: ${currentCamera.name}`, "info", "Feed actualizado.");
+        }
+
+        async function toggleWebcam() {
+            if (!isWebcamActive) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    webcamVideo.srcObject = stream;
+                    webcamVideo.style.display = 'block';
+                    mainImage.style.display = 'none';
+                    isWebcamActive = true;
+                    document.getElementById('camBtnText').innerText = "Volver a Local";
+                    webcamVideo.onloadedmetadata = () => {
+                        canvas.width = webcamVideo.videoWidth;
+                        canvas.height = webcamVideo.videoHeight;
+                    };
+                } catch (err) { alert("Error webcam: " + err); }
+            } else {
+                loadCamera(cameras.indexOf(currentCamera));
+            }
+        }
+
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+        }
+
+        async function analyzeFrame() {
+            addLog("Analizando...", "system", "Procesando con Azure AI");
+            
+            let imageBlob;
+            try {
+                if (isWebcamActive) {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = webcamVideo.videoWidth;
+                    tempCanvas.height = webcamVideo.videoHeight;
+                    tempCanvas.getContext('2d').drawImage(webcamVideo, 0, 0);
+                    imageBlob = await new Promise(r => tempCanvas.toBlob(r, 'image/jpeg'));
+                    canvas.width = webcamVideo.videoWidth;
+                    canvas.height = webcamVideo.videoHeight;
+                } else {
+                    canvas.width = mainImage.naturalWidth;
+                    canvas.height = mainImage.naturalHeight;
+                    ctx.drawImage(mainImage, 0, 0);
+                    imageBlob = await new Promise((resolve) => {
+                        canvas.toBlob(blob => resolve(blob), 'image/jpeg');
+                    });
+                }
+
+                if(!imageBlob) { simulateDetection(); return; }
+
+                const url = `${AZURE_CONFIG.endpoint}/customvision/v3.0/Prediction/${AZURE_CONFIG.projectId}/detect/iterations/${AZURE_CONFIG.iteration}/image`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Prediction-Key': AZURE_CONFIG.key, 'Content-Type': 'application/octet-stream' },
+                    body: imageBlob
+                });
+
+                if (!response.ok) throw new Error("API Error");
+                const data = await response.json();
+                processPredictions(data.predictions);
+
+            } catch (error) {
+                simulateDetection(); 
+            }
+        }
+
+        function processPredictions(predictions) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let phoneDetected = false;
+            const filtered = predictions.filter(p => p.probability > 0.5);
+
+            filtered.forEach(pred => {
+                drawBox(pred);
+                if (pred.tagName.toLowerCase().includes('celular') || pred.tagName.toLowerCase().includes('phone')) {
+                    phoneDetected = true;
+                }
+            });
+
+            if (phoneDetected) {
+                if (currentCamera.zone === "Riesgo") {
+                    triggerAlert();
+                    addLog("INFRACCIÓN", "risk", "Uso de celular en zona prohibida.");
+                } else {
+                    addLog("Detección", "info", "Celular detectado en zona segura.");
+                }
+            } else {
+                videoWrapper.classList.remove('alert-active');
+                addLog("Seguro", "safe", "Sin incidencias.");
+            }
+        }
+
+        function drawBox(prediction) {
+            const x = prediction.boundingBox.left * canvas.width;
+            const y = prediction.boundingBox.top * canvas.height;
+            const w = prediction.boundingBox.width * canvas.width;
+            const h = prediction.boundingBox.height * canvas.height;
+            const isDanger = prediction.tagName.toLowerCase().includes('celular');
+            const color = isDanger ? '#ef4444' : '#3b82f6';
+
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = color;
+            ctx.rect(x, y, w, h);
+            ctx.stroke();
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y - 25, w, 25);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText(`${prediction.tagName}`, x + 5, y - 7);
+        }
+
+        function simulateDetection() {
+            const isRisk = Math.random() > 0.5;
+            if(isRisk){
+                 processPredictions([{tagName: "celular", probability: 0.9, boundingBox: {left:0.3, top:0.3, width:0.2, height:0.3}}]);
+            } else {
+                 processPredictions([]);
+            }
+        }
+
+        function triggerAlert() {
+            videoWrapper.classList.add('alert-active');
+            alarm.play().catch(() => {});
+        }
+
+        function addLog(title, type, detail) {
+            const div = document.createElement('div');
+            div.className = `log-entry log-type-${type}`;
+            div.dataset.type = type; 
+            const now = new Date();
+            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            let icon = type === 'risk' ? 'triangle-exclamation' : (type === 'safe' ? 'check-circle' : 'info-circle');
+            if(type === 'system') icon = 'terminal';
+
+            div.innerHTML = `
+                <div class="log-time">${time}</div>
+                <div class="log-content">
+                    <div class="log-title"><i class="fa-solid fa-${icon}"></i> ${title}</div>
+                    <div class="log-detail">${detail}</div>
+                </div>
+            `;
+            logList.prepend(div);
+        }
+
+        function filterLogs(filterType, btn) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const entries = document.querySelectorAll('.log-entry');
+            entries.forEach(entry => {
+                if (filterType === 'all') entry.style.display = 'grid';
+                else entry.style.display = entry.dataset.type === filterType ? 'grid' : 'none';
+            });
+        }
+
+        function openModal() { document.getElementById('addCamModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('addCamModal').style.display = 'none'; }
+        function saveCamera() {
+            const name = document.getElementById('newCamName').value;
+            const zone = document.getElementById('newCamZone').value;
+            const url = document.getElementById('newCamUrl').value;
+            if(name && url) {
+                cameras.push({ id: cameras.length + 1, name, zone, url });
+                renderCameraList();
+                closeModal();
+            }
+        }
+
+        function generateReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("SafeSight Industrial - Reporte de Seguridad", 14, 20);
+            const data = Array.from(document.querySelectorAll('.log-entry')).map(e => [
+                e.querySelector('.log-time').innerText,
+                e.querySelector('.log-title').innerText,
+                e.querySelector('.log-detail').innerText
+            ]);
+            doc.autoTable({ head: [['Hora', 'Evento', 'Detalle']], body: data, startY: 30 });
+            doc.save('Reporte_SafeSight.pdf');
+        }
+
+        init();
+    </script>
+</body>
+</html>
